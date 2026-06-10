@@ -1,6 +1,12 @@
 import streamlit as st
+from datetime import datetime
 
-def calculate_savings(start_year, start_month, balance, monthly_deposit, annual_rate):
+# 현재 날짜 가져오기
+today = datetime.now()
+start_year = today.year
+start_month = today.month
+
+def calculate_savings(start_year, start_month, balance, monthly_deposit, annual_rate, increase_amount, max_limit):
     monthly_interest_rate = annual_rate / 12
     results = []
     
@@ -9,8 +15,9 @@ def calculate_savings(start_year, start_month, balance, monthly_deposit, annual_
     current_deposit = monthly_deposit
     
     for _ in range(120):
-        if current_month == 1 and current_year > start_year:
-            current_deposit = min(current_deposit + 100000, 2000000)
+        # 매년 1월에 납입액 증액 (시작월이 1월인 경우 제외)
+        if current_month == 1 and not (current_year == start_year and current_month == start_month):
+            current_deposit = min(current_deposit + increase_amount, max_limit)
 
         balance += (balance * monthly_interest_rate)
         balance += current_deposit
@@ -36,6 +43,11 @@ init_balance = st.sidebar.number_input("초기 잔액", value=45000000)
 init_deposit = st.sidebar.number_input("월 납입액", value=1500000)
 annual_rate = st.sidebar.slider("연 이율 (%)", 0.0, 10.0, 5.01, 0.01) / 100
 
-data = calculate_savings(2026, 6, init_balance, init_deposit, annual_rate)
+# 추가된 설정값
+increase_amount = st.sidebar.number_input("매년 증액 금액", value=100000)
+max_limit = st.sidebar.number_input("월 납입 최대 한도", value=2000000)
 
-st.table(data)
+data = calculate_savings(start_year, start_month, init_balance, init_deposit, annual_rate, increase_amount, max_limit)
+
+st.write("시뮬레이션 결과 데이터:")
+st.dataframe(data)
