@@ -1,61 +1,132 @@
 import streamlit as st
 import pandas as pd
+import datetime
+import io
+from openpyxl.styles import Alignment
 
+# 스트림릿 페이지 설정
 st.set_page_config(page_title="급량비 계산기", layout="wide")
-st.title("급량비 계산 프로그램")
+st.title("🍚 지문인식 기반 급량비 계산 시스템")
 
-# 파일 업로더
-emp_file = st.file_uploader("직원명부.xlsx 업로드", type=['xlsx'])
-data_file = st.file_uploader("지문인식.xlsx 업로드", type=['xlsx'])
+# 휴일 목록 설정 (2026년)
+holiday_list = [
+    '2026-01-01', '2026-02-16', '2026-02-17', '2026-02-18', '2026-03-01', '2026-03-02', 
+    '2026-05-01', '2026-05-05', '2026-05-24', '2026-05-25', '2026-06-03', '2026-06-06', 
+    '2026-07-17', '2026-08-15', '2026-08-17', '2026-09-24', '2026-09-25', '2026-09-26', 
+    '2026-10-03', '2026-10-05', '2026-10-09', '2026-12-25'
+]
 
-if emp_file and data_file:
-    # 엑셀 파일 읽기 (헤더가 첫 번째 줄에 있다고 가정)
-    df_emp = pd.read_excel(emp_file)
-    df = pd.read_excel(data_file)
-    
-    # 엑셀의 컬럼명을 리스트로 가져오기
-    cols = df.columns.tolist()
-    
-    # 사용자로부터 매핑할 컬럼 선택
-    col1, col2, col3, col4 = st.columns(4)
-    map_date = col1.selectbox("발생일자 컬럼 선택", cols)
-    map_time = col2.selectbox("발생시간 컬럼 선택", cols)
-    map_name = col3.selectbox("이름 컬럼 선택", cols)
-    map_mode = col4.selectbox("모드 컬럼 선택", cols)
+def is_holiday(date_obj):
+    return (date_obj.weekday() >= 5) or (date_obj.strftime('%Y-%m-%d') in holiday_list)
 
-    if st.button("계산 시작"):
-        # 필수 데이터 확인
-        if '이름' not in df_emp.columns or '근무시간' not in df_emp.columns:
-            st.error("직원명부 파일에 '이름'과 '근무시간' 컬럼이 정확히 있는지 확인해주세요.")
-        else:
-            # 명부를 딕셔너리로 변환 (이름: 근무시간)
-            time_map = dict(zip(df_emp['이름'], df_emp['근무시간']))
+# 1. 파일 업로드 섹션
+st.subheader("1. 파일 업로드")
+col1, col2 = st.columns(2)
+
+with col1:
+    emp_file = st.file_uploader("직원명부.xlsx 파일을 업로드하세요", type=["xlsx"])
+with col2:
+    raw_file = st.file_uploader("지문인식.xlsx 파일을 업로드하세요", type=["xlsx"])
+
+# 두 파일이 모두 업로드되었을 때 실행
+if emp_file and raw_file:
+    try:
+        # 데이터 로드
+        df_emp = pd.read_excel(emp_file)
+        time_map = dict(zip(df_emp['이름'], df_emp['근무시간']))
+        df = pd.read_excel(raw_file, sheet_name='Sheet1')
+        
+        # 2. 컬럼 선택 (스트림릿 Selectbox 활용)
+        st.subheader("2. 데이터 컬럼 매핑")
+        cols = list(df.columns)
+        
+        c1, c2, c3, c4 = st.columns(4)
+        with c1: map_date = st.selectbox("'발생일자' 컬럼 선택", cols, index=0 if len(cols)>0 else 0)
+        with c2: map_time = st.selectbox("'발생시간' 컬럼 선택", cols, index=1 if len(cols)>1 else 0)
+        with c3: map_name = st.selectbox("'이름' 컬럼 선택", cols, index=2 if len(cols)>2 else 0)
+        with c4: map_mode = st.selectbox("'모드' 컬럼 선택", cols, index=3 if len(cols)>3 else 0)
+        
+        # 분석 시작 버튼
+        if st.button("급량비 계산 시작🚀", type="primary"):
             
-            # 선택한 컬럼을 공통된 이름으로 변경
-            df_processed = df.rename(columns={
-                map_date: '발생일자', 
-                map_time: '발생시간', 
-                map_name: '이름', 
-                map_mode: '모드'
-            })
+            # 컬럼명 변경 및 정제
+            df = df.rename(columns={map_date: '발생일자', map_time: '발생시간', map_name: '이름', map_mode: '모드'})
+            df['모드'] = df['모드'].astype(str).str.strip()
+            df = df[df['이름'].isin(time_map.keys()) & df['모드'].isin(['출근', '퇴근'])].copy()
             
-            # 데이터 정제 (모드 컬럼 공백 제거)
-            df_processed['모드'] = df_processed['모드'].astype(str).str.strip()
+            # 날짜/시간 결합 로직
+            if map_date == map_time:
+                df['일시'] = pd.to_datetime(df['발생일자'])
+                df['발생일자'] = df['일시'].dt.normalize()
+            else:
+                df['발생일자'] = pd.to_datetime(df['발생일자'])
+                df['일시'] = pd.to_datetime(df['발생일자'].dt.strftime('%Y-%m-%d') + ' ' + df['발생시간'].astype(str))
             
-            # 직원명부에 있는 이름만 필터링하고 '출근' 또는 '퇴근' 데이터만 추출
-            df_result = df_processed[
-                df_processed['이름'].isin(time_map.keys()) & 
-                df_processed['모드'].isin(['출근', '퇴근'])
-            ].copy()
+            # 피벗 및 로직 계산
+            result = df.pivot_table(index=['이름', '발생일자'], columns='모드', values='일시', aggfunc=['min', 'max'])
+            df_pivot = pd.DataFrame(index=result.index)
+            df_pivot['출근_퍼스트'] = result.get(('min', '출근'), pd.NaT)
+            df_pivot['퇴근_라스트'] = result.get(('max', '퇴근'), pd.NaT)
+            df_pivot = df_pivot.reset_index()
             
-            # 근무시간 매핑
-            df_result['기준근무시간'] = df_result['이름'].map(time_map)
+            def calculate_status(row):
+                name = row['이름']
+                date = pd.to_datetime(row['발생일자'])
+                target_hour = time_map.get(name, 9)
+                c_first = pd.to_datetime(row['출근_퍼스트']).time() if pd.notna(row['출근_퍼스트']) else None
+                t_last = pd.to_datetime(row['퇴근_라스트']).time() if pd.notna(row['퇴근_라스트']) else None
+                출근급량비, 퇴근급량비, 휴일급량비 = 0, 0, 0
+                
+                if is_holiday(date):
+                    if c_first and t_last:
+                        diff = (datetime.datetime.combine(date, t_last) - datetime.datetime.combine(date, c_first)).total_seconds() / 3600
+                        if 1 <= diff < 9: 휴일급량비 = 1
+                else:
+                    if c_first and c_first <= datetime.time(target_hour - 1, 0, 59): 출근급량비 = 1
+                    if t_last and t_last >= datetime.time(target_hour + 10, 0): 퇴근급량비 = 1
+                return pd.Series([출근급량비, 퇴근급량비, 휴일급량비])
             
-            st.success("계산이 완료되었습니다.")
-            st.dataframe(df_result)
+            df_pivot[['출근급량비', '퇴근급량비', '휴일급량비']] = df_pivot.apply(calculate_status, axis=1)
+            df_pivot['총_발생'] = df_pivot[['출근급량비', '퇴근급량비', '휴일급량비']].sum(axis=1)
             
-            # 결과물 다운로드 버튼 (필요한 경우)
-            csv = df_result.to_csv(index=False).encode('utf-8-sig')
-            st.download_button("결과 파일 다운로드(CSV)", csv, "result.csv", "text/csv")
+            # 요약 데이터 생성
+            df_summary = pd.DataFrame([{
+                '이름': n, '총건수': len(g), '지급금액': len(g) * 9000, 
+                '발생일자_목록': ", ".join(g['발생일자'].dt.day.astype(str))
+            } for n, g in df_pivot[df_pivot['총_발생'] > 0].groupby('이름')])
+            
+            # 화면에 결과 미리보기 보여주기
+            st.subheader("📋 계산 결과 미리보기")
+            tab1, tab2 = st.tabs(["지급 요약", "상세 내역"])
+            with tab1:
+                st.dataframe(df_summary, use_container_width=True)
+            with tab2:
+                # datetime 객체를 문자열로 임시 변환하여 화면에 이쁘게 출력
+                df_display = df_pivot.copy()
+                df_display['발생일자'] = df_display['발생일자'].dt.strftime('%Y-%m-%d')
+                st.dataframe(df_display, use_container_width=True)
+                
+            # openpyxl 서식 적용 및 메모리 버퍼 저장 (스트림릿 다운로드용)
+            buffer = io.BytesIO()
+            with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+                df_pivot.to_excel(writer, sheet_name='상세내역', index=False)
+                df_summary.to_excel(writer, sheet_name='지급요약', index=False)
+                wb = writer.book
+                for sheet in [wb['상세내역'], wb['지급요약']]:
+                    for row in sheet.iter_rows():
+                        for cell in row: 
+                            cell.alignment = Alignment(horizontal='center', vertical='center')
+            
+            # 다운로드 버튼 생성
+            st.success("급량비 계산 완료!")
+            st.download_button(
+                label="📥 엑셀 파일 다운로드 (.xlsx)",
+                data=buffer.getvalue(),
+                file_name="급량비_결과.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            )
+            
+    except Exception as e:
+        st.error(f"오류가 발생했습니다: {e}")
 else:
-    st.info("파일 두 개를 모두 업로드하면 설정을 진행할 수 있습니다.")
+    st.info("💡 두 개의 엑셀 파일(직원명부, 지문인식)을 모두 업로드하면 컬럼 선택 창이 나타납니다.")
