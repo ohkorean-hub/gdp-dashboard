@@ -1,19 +1,32 @@
-# :earth_americas: GDP dashboard template
 
-A simple Streamlit app showing the GDP of different countries in the world.
+Markdown
+# 🍱 급량비 자동 계산 프로그램 (Streamlit)
 
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://gdp-dashboard-template.streamlit.app/)
+급량비 계산의 번거로움을 줄이고, 복잡한 수당 정산을 빠르고 정확하게 처리하기 위해 제작된 자동 계산 프로그램입니다. 
 
-### How to run it on your own machine
+---
 
-1. Install the requirements
+## ✨ 주요 기능
+* **자동 계산**: 근무 시간 및 조건에 따른 급량비 즉시 산출
+* **편의성**: 복잡한 수당 기준을 반영한 직관적인 대시보드 화면 제공
+* **결과 확인**: [엑셀 다운로드 / 화면 캡처 등 주요 기능이 있다면 적어주세요, 없으면 이 줄은 지우기]
 
-   ```
-   $ pip install -r requirements.txt
-   ```
+---
 
-2. Run the app
+## 🛠️ 실행 방법 (How to Run)
 
-   ```
-   $ streamlit run streamlit_app.py
-   ```
+로컬 환경(내 컴퓨터)에서 직접 실행하려면 아래 명령어를 순서대로 입력하세요.
+
+1. **필수 라이브러리 설치**
+```bash
+   pip install -r requirements.txt
+프로그램 실행
+Bash
+   streamlit run streamlit_app.py
+⚠️ 사용 및 배포 시 주의사항 (Disclaimer)
+참고용 프로그램: 본 프로그램은 개인이 개발한 급량비 계산 편의 도구입니다.
+최종 확인 책임: 프로그램 계산 결과는 실제 행정 처리나 정산 결과와 다를 수 있으므로, 최종 제출 및 결재 전에는 반드시 담당자가 직접 재확인하시기 바랍니다. 계산 오류로 인해 발생하는 불이익에 대해 개발자는 법적 책임을 지지 않습니다.
+출처 표기: 코드를 퍼가거나(Fork/Clone) 수정하여 재배포할 경우, 원작자(ohkorean-hub)의 출처를 명확히 밝혀주시기 바랍니다.
+보안 주의: 개인이 수정하여 사용할 때 내부 행정 데이터나 민감한 개인정보가 소스코드 및 커밋 기록에 포함되어 깃허브에 노출되지 않도록 주의하세요.
+📄 라이선스 (License)
+This project is licensed under the Apache-2.0 License - see the LICENSE file for details.
